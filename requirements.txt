@@ -1,0 +1,25 @@
+# Core agent framework
+langgraph==1.2.2
+langchain==1.3.2
+langchain-core==1.4.0
+langchain-openai==1.2.2            # OpenAI-compatible client -> Nebius Token Factory
+
+# Persistent memory (Task 2: checkpoints that survive restarts)
+langgraph-checkpoint-sqlite==3.1.0
+
+# Tool input/output schemas (Task 1: Pydantic schemas on every tool)
+pydantic==2.13.4
+
+# Data layer: load & analyze the Bitext Customer Service dataset
+pandas==3.0.3
+datasets==4.8.5                    # pulls the Bitext dataset from Hugging Face
+
+# Task 3: expose tools over MCP
+fastmcp==3.3.1
+mcp==1.27.1                        # MCP client (for the README "connect a client" demo)
+
+# Config / secrets (Nebius API key via .env)
+python-dotenv==1.2.2
+
+# --- Bonus A (Streamlit UI) -- uncomment if attempted ---
+# streamlit==1.41.1
