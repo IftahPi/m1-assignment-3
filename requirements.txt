@@ -21,5 +21,8 @@ mcp==1.27.1                        # MCP client (for the README "connect a clien
 # Config / secrets (Nebius API key via .env)
 python-dotenv==1.2.2
 
+# Testing (TDD — python-oop skill)
+pytest==9.0.1
+
 # --- Bonus A (Streamlit UI) -- uncomment if attempted ---
 # streamlit==1.41.1
