@@ -26,7 +26,7 @@ Requires a `.env` (gitignored) with `NEBIUS_API_KEY=...` on a single line. Copy 
 
 ## Architecture (the big picture)
 
-**Dual-model strategy** (`nebius_client.py`): all LLM calls go through `make_llm(model, temperature)` → `ChatOpenAI` pointed at Nebius's OpenAI-compatible endpoint. A small cheap MoE (`ROUTER_MODEL` = Qwen3-30B-A3B-Instruct) classifies; a larger model (`GENERATOR_MODEL` = Llama-3.3-70B) reasons/answers. Only Nebius Token Factory models are allowed.
+**Dual-model strategy** (`nebius_client.py`): all LLM calls go through `make_llm(model, temperature)` → `ChatOpenAI` pointed at Nebius's OpenAI-compatible endpoint. A small cheap MoE (`ROUTER_MODEL` = Qwen3-30B-A3B-Instruct) classifies; a ReAct-native model (`GENERATOR_MODEL` = openai/gpt-oss-120b) reasons/answers — chosen over Llama-3.3-70B after an A/B on the rubric (gpt-oss-120b emits visible Thought content alongside tool_calls; Llama's function-calling mode keeps content empty). Only Nebius Token Factory models are allowed.
 
 **Layered, DRY data access** — the key design decision:
 - `dataset/analytics.py` holds **pure functions** (DataFrame in → typed JSON-serializable value out): `list_categories`, `list_intents`, `count_records`, `get_examples`, `intent_distribution`, `search_examples`. No LangChain, no I/O. Filters: category/intent case-insensitive, `text_contains` substring over the customer `instruction`.

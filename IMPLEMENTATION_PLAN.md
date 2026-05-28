@@ -113,7 +113,7 @@ Nebius exposes an **OpenAI-compatible** API, so use `langchain_openai.ChatOpenAI
 - API key from env `NEBIUS_API_KEY`.
 - **Recommended models (CONFIRM with user before coding):**
   - `ROUTER_MODEL = "meta-llama/Llama-3.1-8B-Instruct"` — cheap/fast classifier.
-  - `GENERATOR_MODEL = "meta-llama/Llama-3.3-70B-Instruct"` — strong tool-calling + summarization.
+  - `GENERATOR_MODEL = "openai/gpt-oss-120b"` — ReAct-native (emits Thought content alongside tool_calls); chosen over Llama-3.3-70B after A/B on the rubric.
   - (If user picks single-model: use the 70B for both.)
 - Provide a helper:
   ```python

@@ -145,14 +145,16 @@ A routed ReAct loop, built as a custom LangGraph `StateGraph` (not the off-the-s
 
 ### Model choice & justification
 
-A **dual-model strategy**: small cheap model for the routing decision, larger model for tool-calling reasoning and summarization. This is the W4 "Routing" workflow pattern applied to the agent itself.
+A **dual-model strategy** — a small cheap model for the routing decision, a larger ReAct-native model for tool-calling, reasoning, and summarization. This is the W4 "Routing" workflow pattern applied to the agent itself.
 
 | Role | Model | Why |
 |---|---|---|
-| **Router** | `Qwen/Qwen3-30B-A3B-Instruct-2507` | MoE with **~3B active parameters** — very cheap and fast per call. The router only needs to classify, not reason. Verified that `.with_structured_output(RouteDecision)` returns clean enum values. The "Instruct" (non-thinking) variant avoids slow chain-of-thought outputs on a classification task. |
-| **Generator** | `meta-llama/Llama-3.3-70B-Instruct` | Strong native tool-calling support; well-understood ReAct behaviour. Only Llama in the mid-70B class available on this Nebius account. `temperature=0.2` (not 0) to break deterministic tool-call loops without losing reproducibility. |
+| **Router** | `Qwen/Qwen3-30B-A3B-Instruct-2507` | MoE with **~3B active parameters** — very cheap and fast per call. The router only needs to classify, not reason. Verified that `.with_structured_output(RouteDecision)` returns clean enum values. The "Instruct" (non-thinking) variant avoids slow chain-of-thought outputs on a classification task. **Live router accuracy: 13/13 on the assignment's example queries** (`router_eval.py`). |
+| **Generator** | `openai/gpt-oss-120b` | Chosen over `meta-llama/Llama-3.3-70B-Instruct` after a head-to-head A/B against the agent rubric (see `agent_eval.py`). Three concrete wins: (1) it emits a brief **reasoning sentence as message content alongside its tool calls**, so the CLI shows the actual `💭 THOUGHT` line the assignment's "print reasoning steps" requirement asks for — Llama-3.3-70B in function-calling mode keeps that content empty; (2) cleaner tool-call discipline (no junk null-string args, no redundant duplicates triggering `force_answer`, no fabricated example rows when a tool returns empty); (3) noticeably better answer formatting (markdown tables for examples and distributions). Run at `temperature=0.2` to break deterministic loops without losing reproducibility. |
 
 Both go through `nebius_client.make_llm()`, which wraps `langchain_openai.ChatOpenAI` with `base_url=https://api.studio.nebius.com/v1/`.
+
+> **A/B summary** — same 11-query trace dump, identical router, only the generator swapped. Llama-3.3-70B: 8 PASS / 1 partial / **2 hard fails** (one multi-step regression, one fabricated-examples answer on an empty tool result). gpt-oss-120b: **11/11 PASS**, with visible `💭 THOUGHT` lines on 6 of the 11 cases. The 120B is larger and slightly slower / costlier per call, but the quality gap on this assignment justifies it.
 
 ### Tools
 

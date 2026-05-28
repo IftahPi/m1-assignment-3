@@ -20,9 +20,11 @@ NEBIUS_BASE_URL: str = os.getenv("NEBIUS_BASE_URL", "https://api.studio.nebius.c
 
 # Dual-model strategy (override via env if a different Nebius id is desired).
 # Router: small/cheap MoE (~3B active params) for fast query classification.
-# Generator: larger model for tool-calling, reasoning, and summarization.
+# Generator: ReAct-native model that emits visible Thought content alongside its
+# tool calls (chosen over Llama-3.3-70B after an A/B on the rubric — gpt-oss-120b
+# wins on data-grounding, formatting, and the visible-reasoning trace).
 ROUTER_MODEL: str = os.getenv("ROUTER_MODEL", "Qwen/Qwen3-30B-A3B-Instruct-2507")
-GENERATOR_MODEL: str = os.getenv("GENERATOR_MODEL", "meta-llama/Llama-3.3-70B-Instruct")
+GENERATOR_MODEL: str = os.getenv("GENERATOR_MODEL", "openai/gpt-oss-120b")
 
 
 def get_api_key() -> str:
