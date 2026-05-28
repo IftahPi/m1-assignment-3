@@ -26,7 +26,7 @@ These override any convention implied elsewhere in this doc. Non-negotiable:
 ```
 m1-assignment-3/
   data/bitext_customer_support.csv   # cached (gitignored)
-  config.py                  # Nebius settings + make_llm()  (root module)
+  nebius_client.py           # Nebius settings + make_llm()  (root module)
   dataset/
     __init__.py
     loader.py                # load_dataframe() (cached)
@@ -53,7 +53,7 @@ m1-assignment-3/
     test_profile.py
   README.md  requirements.txt  .env.example  .gitignore
 ```
-- **Imports are absolute from the repo root**: `from config import make_llm`, `from dataset.analytics import count_records`, `from agent.graph import build_graph`. Running `python main.py` from the root puts the root on `sys.path`; `conftest.py` does the same for pytest. No `src/` layer, no `pip install -e .`, no `sys.path.insert`.
+- **Imports are absolute from the repo root**: `from nebius_client import make_llm`, `from dataset.analytics import count_records`, `from agent.graph import build_graph`. Running `python main.py` from the root puts the root on `sys.path`; `conftest.py` does the same for pytest. No `src/` layer, no `pip install -e .`, no `sys.path.insert`.
 - (Rename note: earlier sections say `data_tools.py`/`agent_tools.py` — real homes are `dataset/analytics.py` and `agent/tools.py`. Keep the function names.)
 
 ---
@@ -87,7 +87,7 @@ file `Bitext_Sample_Customer_Support_Training_Dataset_27K_responses-v11.csv`.
 
 ---
 
-## 1. Nebius Token Factory config (`config.py`)
+## 1. Nebius Token Factory config (`nebius_client.py`)
 
 Nebius exposes an **OpenAI-compatible** API, so use `langchain_openai.ChatOpenAI` with a custom base URL.
 
@@ -228,7 +228,7 @@ Sections: (1) overview, (2) setup (`python -m venv`, `pip install -r requirement
 
 Each step is **Red→Green→Refactor**: write the failing test(s) first, watch them fail, then implement.
 
-1. `src/config.py` + `.env.example` → smoke-test: one real Nebius call returns text. (boundary; verify manually once, not a unit test.)
+1. `nebius_client.py` + `.env.example` → smoke-test: one real Nebius call returns text. (boundary; verify manually once, not a unit test.)
 2. `src/dataset/loader.py` + `src/dataset/analytics.py` → **`tests/test_analytics.py` first** against a tiny fixture DataFrame: counts, filters (category/intent/text), examples, distribution, search, unknown-value → empty. No mocks.
 3. `src/agent/schemas.py` + `src/agent/tools.py` → `tests/test_tools.py`: tool wrappers call through and return typed data; schemas validate/reject bad input.
 4. `src/agent/state.py` + `src/agent/graph.py` (no memory yet) + `src/cli/repl.py` + thin `main.py` → `tests/test_router.py` (mock LLM boundary: each label routes correctly, OOS → decline) and `tests/test_graph.py` (multi-step chains tools; max-iter → fallback). **Task 1 acceptance:** all 8 demo queries behave (OOS decline, multi-step, reasoning printed, fallback).
