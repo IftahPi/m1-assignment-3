@@ -1,6 +1,6 @@
 # Assignment 3 — Deliverables Checklist & Grading Notes
 
-> Due **2026-05-29**. Submit a GitHub repo (or zip) whose name includes **both students' first + last names**.
+> Due **2026-05-29**. Submit a GitHub repo (or zip).
 > Only **Nebius Token Factory** models allowed for any LLM call.
 
 ## What gets submitted (the package)

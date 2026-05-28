@@ -238,7 +238,7 @@ Invoke with `config={"configurable": {"thread_id": session_id}, "recursion_limit
 
 ## 10. README.md (graded — 5-min clone-to-run)
 
-Sections: (1) overview, (2) setup (`python -m venv`, `pip install -r requirements.txt`, copy `.env.example`→`.env`, add Nebius key), (3) run the CLI (`python main.py --session demo`), (4) example queries + expected behavior incl. out-of-scope decline, (5) MCP: start server + client snippet, (6) architecture: graph diagram (router→decline/agent⇄tools→fallback), tool list with one-line descriptions, **model choice + justification** (router vs generator), memory design (SqliteSaver + profile file). Rename repo to include both students' names.
+Sections: (1) overview, (2) setup (`python -m venv`, `pip install -r requirements.txt`, copy `.env.example`→`.env`, add Nebius key), (3) run the CLI (`python main.py --session demo`), (4) example queries + expected behavior incl. out-of-scope decline, (5) MCP: start server + client snippet, (6) architecture: graph diagram (router→decline/agent⇄tools→fallback), tool list with one-line descriptions, **model choice + justification** (router vs generator), memory design (SqliteSaver + profile file).
 
 ---
 
