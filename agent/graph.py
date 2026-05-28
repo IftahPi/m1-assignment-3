@@ -50,6 +50,9 @@ to the right filter, e.g. "refund requests" -> category 'REFUND' (or intent 'get
 -> intent 'complaint'; a phrase in the user's own words -> search_examples.
 
 Rules for using tools:
+- Before EVERY tool call, write ONE short sentence in your reply content explaining what you are about \
+to look up and why. Keep it brief — one sentence. Put it in the assistant message content, alongside \
+the tool call itself.
 - Never call the same tool twice with the same arguments. One call returns all the data you need from it.
 - In particular, call get_examples or search_examples EXACTLY ONCE per request, then present those rows.
 - As soon as a tool has returned the data, STOP calling tools and write the final answer.

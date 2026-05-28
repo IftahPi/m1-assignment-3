@@ -55,6 +55,44 @@ def test_repl_renders_router_tool_observation_and_answer():
     assert "We received 2992 refund requests." in text  # final answer shown
 
 
+def test_repl_renders_thought_before_tool_call_when_content_present():
+    """A non-empty content alongside tool_calls is rendered as a thought BEFORE the tool call."""
+    chunks = [
+        {"agent": {"messages": [AIMessage(
+            content="I need to count refund requests in the dataset.",
+            tool_calls=[{"name": "count_records", "args": {"category": "REFUND"},
+                         "id": "c1", "type": "tool_call"}],
+        )]}},
+    ]
+    graph = FakeGraph(chunks)
+    outputs: list[str] = []
+    run_repl(graph=graph, input_fn=_scripted_input(["go", "quit"]),
+             output_fn=outputs.append)
+
+    text = "\n".join(outputs)
+    assert "💭" in text
+    assert "I need to count refund requests in the dataset." in text
+    # The thought is rendered BEFORE the tool call line.
+    assert text.index("I need to count refund") < text.index("count_records")
+
+
+def test_repl_skips_thought_when_content_is_empty():
+    """Empty content alongside tool_calls must NOT print a stray thought line."""
+    chunks = [
+        {"agent": {"messages": [AIMessage(
+            content="",
+            tool_calls=[{"name": "count_records", "args": {"category": "REFUND"},
+                         "id": "c1", "type": "tool_call"}],
+        )]}},
+    ]
+    graph = FakeGraph(chunks)
+    outputs: list[str] = []
+    run_repl(graph=graph, input_fn=_scripted_input(["go", "quit"]),
+             output_fn=outputs.append)
+
+    assert all("💭" not in line for line in outputs)
+
+
 def test_repl_skips_empty_and_whitespace_input():
     graph = FakeGraph([{"agent": {"messages": [AIMessage(content="hi")]}}])
     outputs: list[str] = []

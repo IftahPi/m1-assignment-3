@@ -41,6 +41,10 @@ def _truncate(text: str, limit: int = 300) -> str:
 def _render_message(message: object, output_fn: Callable[[str], None]) -> None:
     """Print a single graph message as a reasoning step or the final answer."""
     if isinstance(message, AIMessage) and message.tool_calls:
+        # When the model emits text alongside tool_calls, it's the pre-action "thought".
+        thought = str(message.content or "").strip()
+        if thought:
+            output_fn(f"  💭 {thought}")
         for call in message.tool_calls:
             output_fn(f"  🔧 {call['name']}({_format_args(call['args'])})")
     elif isinstance(message, ToolMessage):
