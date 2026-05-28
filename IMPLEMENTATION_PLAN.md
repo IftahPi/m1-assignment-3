@@ -5,6 +5,24 @@
 
 ---
 
+## STATUS — resume here (updated as we go)
+
+**DONE & committed (steps 1–3):** planning docs · pinned `requirements.txt` · `.gitignore` · `nebius_client.py` (+ smoke test, connectivity verified) · query router (`agent/router.py`, `agent/schemas.py::RouteDecision`) · CLI shell with welcome banner (`cli/repl.py` step-3 form) · `router_eval.py` (13/13 live).
+
+**DONE, NOT yet committed (step 4 = Task 1 complete):** `dataset/{loader,analytics}.py` · tool input schemas + `agent/tools.py` (6 tools) · `agent/state.py` · `agent/graph.py` (routed ReAct loop + `force_answer` dedupe guard + `fallback`) · `cli/repl.py` rewritten to stream reasoning · `agent_eval.py` (8/8 live). **42 unit tests pass.** Generator runs at `temperature=0.2`; `MAX_ITERATIONS=12`. Self-ranked 9/10.
+
+**TODO (in order):**
+1. Commit step 4.
+2. **Task 2a** — SQLite checkpointer (`langgraph-checkpoint-sqlite`), `main.py --session <id>`, persistence across restart, follow-up queries. (`build_graph(checkpointer=...)` already accepts a checkpointer.)
+3. **Task 2b** — per-user profile (distilled facts, persisted, injected into the agent system prompt; "what do you remember about me?"). See plan §7.
+4. **Task 3** — `mcp_server.py` (FastMCP) exposing ≥3 `dataset.analytics` functions; README client snippet.
+5. `README.md` (5-min clone-to-run, architecture, model choice, MCP connect) and the deliverable **zip** (see `DELIVERABLES_NOTES.md`).
+6. Optional bonuses (Streamlit UI; query recommender).
+
+Architecture overview for fast onboarding is in `CLAUDE.md`. Detailed per-file specs below.
+
+---
+
 ## CODING STANDARDS (binding — from the `python-oop` skill)
 
 These override any convention implied elsewhere in this doc. Non-negotiable:

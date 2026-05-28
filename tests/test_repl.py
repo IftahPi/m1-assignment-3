@@ -1,130 +1,90 @@
-"""Test the interactive REPL loop."""
+"""Tests for the interactive REPL, using a fake graph (no LLM, no network)."""
 
-from agent.schemas import RouteDecision
+from langchain_core.messages import AIMessage, ToolMessage
+
 from cli.repl import WELCOME_MESSAGE, run_repl
 
 
+class FakeGraph:
+    """A stand-in graph whose .stream() yields canned update chunks."""
+
+    def __init__(self, chunks: list | None = None) -> None:
+        self.chunks = chunks or []
+        self.stream_calls = 0
+
+    def stream(self, state, config=None, stream_mode=None):
+        self.stream_calls += 1
+        return iter(self.chunks)
+
+
+def _scripted_input(lines: list[str]):
+    it = iter(lines)
+    return lambda prompt: next(it)
+
+
 def test_repl_prints_welcome_on_start():
-    """The REPL greets the user with the welcome message before reading any input."""
-    def fake_classify(query: str) -> RouteDecision:
-        return RouteDecision(route="structured", reason="Test.")
+    graph = FakeGraph()
+    outputs: list[str] = []
+    run_repl(graph=graph, input_fn=_scripted_input(["quit"]), output_fn=outputs.append)
 
-    def fake_input(prompt: str) -> str:
-        return "quit"
-
-    output_lines: list[str] = []
-    run_repl(classify=fake_classify, input_fn=fake_input, output_fn=output_lines.append)
-
-    assert output_lines[0] == WELCOME_MESSAGE
+    assert outputs[0] == WELCOME_MESSAGE
     assert "dataset" in WELCOME_MESSAGE.lower()
 
 
-def test_repl_basic_flow():
-    """Test that the REPL reads a query, classifies it, prints the result, and handles quit."""
-    # Fixed classify function
-    def fake_classify(query: str) -> RouteDecision:
-        if query == "How many orders?":
-            return RouteDecision(route="structured", reason="Asking for a count.")
-        return RouteDecision(route="out_of_scope", reason="Unknown.")
+def test_repl_renders_router_tool_observation_and_answer():
+    chunks = [
+        {"router": {"route": "structured"}},
+        {"agent": {"messages": [AIMessage(
+            content="",
+            tool_calls=[{"name": "count_records", "args": {"category": "REFUND"},
+                         "id": "c1", "type": "tool_call"}],
+        )]}},
+        {"tools": {"messages": [ToolMessage(content="2992", tool_call_id="c1")]}},
+        {"agent": {"messages": [AIMessage(content="We received 2992 refund requests.")]}},
+    ]
+    graph = FakeGraph(chunks)
+    outputs: list[str] = []
+    run_repl(graph=graph, input_fn=_scripted_input(["How many refunds?", "quit"]),
+             output_fn=outputs.append)
 
-    # Scripted input
-    inputs = ["How many orders?", "quit"]
-    input_iter = iter(inputs)
+    text = "\n".join(outputs)
+    assert "router → structured" in text          # router decision shown
+    assert "count_records" in text                 # tool call shown
+    assert "REFUND" in text                         # tool args shown
+    assert "2992" in text                           # observation shown
+    assert "We received 2992 refund requests." in text  # final answer shown
 
-    def fake_input(prompt: str) -> str:
-        return next(input_iter)
 
-    # Capture output
-    output_lines = []
+def test_repl_skips_empty_and_whitespace_input():
+    graph = FakeGraph([{"agent": {"messages": [AIMessage(content="hi")]}}])
+    outputs: list[str] = []
+    run_repl(graph=graph, input_fn=_scripted_input(["", "   ", "quit"]),
+             output_fn=outputs.append)
 
-    def fake_output(text: str) -> None:
-        output_lines.append(text)
+    assert graph.stream_calls == 0  # never ran the graph for blank input
 
-    run_repl(classify=fake_classify, input_fn=fake_input, output_fn=fake_output)
 
-    # Verify output contains the route and reason
-    output_text = "\n".join(output_lines)
-    assert "structured" in output_text
-    assert "Asking for a count." in output_text
+def test_repl_exits_on_quit_without_running_graph():
+    graph = FakeGraph()
+    run_repl(graph=graph, input_fn=_scripted_input(["quit"]), output_fn=lambda _t: None)
+    assert graph.stream_calls == 0
 
 
 def test_repl_handles_eof():
-    """Test that the REPL exits gracefully on EOFError."""
-    def fake_classify(query: str) -> RouteDecision:
-        return RouteDecision(route="structured", reason="Test.")
+    graph = FakeGraph()
 
-    def fake_input_eof(prompt: str) -> str:
+    def raise_eof(prompt: str) -> str:
         raise EOFError()
 
-    output_lines = []
-
-    def fake_output(text: str) -> None:
-        output_lines.append(text)
-
-    # Should not raise; should exit cleanly
-    run_repl(classify=fake_classify, input_fn=fake_input_eof, output_fn=fake_output)
+    run_repl(graph=graph, input_fn=raise_eof, output_fn=lambda _t: None)
+    assert graph.stream_calls == 0
 
 
 def test_repl_handles_keyboard_interrupt():
-    """Test that the REPL exits gracefully on KeyboardInterrupt."""
-    def fake_classify(query: str) -> RouteDecision:
-        return RouteDecision(route="structured", reason="Test.")
+    graph = FakeGraph()
 
-    def fake_input_interrupt(prompt: str) -> str:
+    def raise_interrupt(prompt: str) -> str:
         raise KeyboardInterrupt()
 
-    output_lines = []
-
-    def fake_output(text: str) -> None:
-        output_lines.append(text)
-
-    # Should not raise; should exit cleanly
-    run_repl(classify=fake_classify, input_fn=fake_input_interrupt, output_fn=fake_output)
-
-
-def test_repl_exit_command():
-    """Test that 'exit' terminates the REPL."""
-    def fake_classify(query: str) -> RouteDecision:
-        return RouteDecision(route="structured", reason="Test.")
-
-    inputs = ["exit"]
-    input_iter = iter(inputs)
-
-    def fake_input(prompt: str) -> str:
-        return next(input_iter)
-
-    output_lines = []
-
-    def fake_output(text: str) -> None:
-        output_lines.append(text)
-
-    run_repl(classify=fake_classify, input_fn=fake_input, output_fn=fake_output)
-
-    # Should have exited without error
-
-
-def test_repl_empty_input_is_skipped():
-    """Empty/whitespace input re-prompts (is not classified); loop continues until quit."""
-    classified_queries = []
-
-    def fake_classify(query: str) -> RouteDecision:
-        classified_queries.append(query)
-        return RouteDecision(route="structured", reason="Test.")
-
-    inputs = ["", "   ", "quit"]
-    input_iter = iter(inputs)
-
-    def fake_input(prompt: str) -> str:
-        return next(input_iter)
-
-    output_lines = []
-
-    def fake_output(text: str) -> None:
-        output_lines.append(text)
-
-    run_repl(classify=fake_classify, input_fn=fake_input, output_fn=fake_output)
-
-    # Empty and whitespace-only inputs are skipped, never classified.
-    assert classified_queries == []
-    # Only the welcome banner is printed; no router output lines.
-    assert not any(line.startswith("[router]") for line in output_lines)
+    run_repl(graph=graph, input_fn=raise_interrupt, output_fn=lambda _t: None)
+    assert graph.stream_calls == 0
