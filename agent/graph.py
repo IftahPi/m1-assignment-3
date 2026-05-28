@@ -31,6 +31,19 @@ AGENT_SYSTEM_PROMPT: str = """You are a data analyst for the Bitext Customer Ser
 Each row has: category (one of 11 high-level groups), intent (one of 27 fine-grained intents), \
 instruction (the customer's message), and response (the agent's reply).
 Categories: ACCOUNT, CANCEL, CONTACT, DELIVERY, FEEDBACK, INVOICE, ORDER, PAYMENT, REFUND, SHIPPING, SUBSCRIPTION.
+Intents: cancel_order, change_order, change_shipping_address, check_cancellation_fee, check_invoice, \
+check_payment_methods, check_refund_policy, complaint, contact_customer_service, contact_human_agent, \
+create_account, delete_account, delivery_options, delivery_period, edit_account, get_invoice, \
+get_refund, newsletter_subscription, payment_issue, place_order, recover_password, registration_problems, \
+review, set_up_shipping_address, switch_account, track_order, track_refund.
+
+DECIDING CATEGORY vs INTENT: look the word up in the two lists above — that is the only correct test. \
+If the word appears in the categories list (e.g. SHIPPING, REFUND, ACCOUNT) put it in the `category` \
+parameter; if it appears in the intents list (e.g. get_refund, change_shipping_address) put it in the \
+`intent` parameter. The user's letter case can vary ("shipping", "Shipping", "SHIPPING" all refer to \
+the same category) — match by membership, not by capitalization. The user can also misuse the words: \
+phrases like "the SHIPPING intent" still mean the SHIPPING *category*, because SHIPPING is in the \
+categories list, not the intents list.
 
 Always use the provided tools to get facts — never invent numbers or examples. Map the user's wording \
 to the right filter, e.g. "refund requests" -> category 'REFUND' (or intent 'get_refund'); "complaints" \
@@ -42,6 +55,9 @@ Rules for using tools:
 - As soon as a tool has returned the data, STOP calling tools and write the final answer.
 - If a question needs several different facts (e.g. two counts to add up), make those few distinct calls, \
 then combine the results.
+- If a tool returns an EMPTY result ([] or 0), do not stop and do not describe what the tool would do. \
+Most often the user named a category but you used the intent slot (or vice-versa) — retry ONCE with the \
+swapped slot (category <-> intent). If it's still empty, tell the user plainly that nothing matched.
 
 Rules for the final answer:
 - Always include the concrete result itself — the number, the list, or the example messages — not just a \

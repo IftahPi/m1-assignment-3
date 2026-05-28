@@ -44,6 +44,9 @@ CASES: list[AgentEvalCase] = [
     # These two previously looped to the fallback; the dedupe guard must let them finish.
     AgentEvalCase("Show me 3 examples from the SHIPPING category."),
     AgentEvalCase("Show me examples of people wanting their money back."),
+    # Assignment phrasing: "SHIPPING intent" -- but SHIPPING is a CATEGORY. The agent must
+    # disambiguate (uppercase word -> category) and still return useful examples.
+    AgentEvalCase("Show me 3 examples from the SHIPPING intent.", must_contain=("SHIPPING",)),
     AgentEvalCase("Who is the president of France?", expect_decline=True),
     AgentEvalCase("What's the best CRM software for handling complaints?", expect_decline=True),
 ]
