@@ -55,6 +55,15 @@ def test_repl_renders_router_tool_observation_and_answer():
     assert "We received 2992 refund requests." in text  # final answer shown
 
 
+def test_welcome_message_includes_trace_symbol_legend():
+    """The welcome banner explains every symbol the reasoning trace uses."""
+    legend = WELCOME_MESSAGE
+    for symbol in ("🧭", "💭", "🔧", "📊", "🤖"):
+        assert symbol in legend, f"welcome banner is missing symbol: {symbol}"
+    for label in ("router", "thought", "tool", "observation", "answer"):
+        assert label in legend.lower(), f"welcome banner is missing label: {label!r}"
+
+
 def test_repl_renders_thought_before_tool_call_when_content_present():
     """A non-empty content alongside tool_calls is rendered as a thought BEFORE the tool call."""
     chunks = [
@@ -90,7 +99,9 @@ def test_repl_skips_thought_when_content_is_empty():
     run_repl(graph=graph, input_fn=_scripted_input(["go", "quit"]),
              output_fn=outputs.append)
 
-    assert all("💭" not in line for line in outputs)
+    # outputs[0] is the welcome banner, which legitimately contains 💭 in its
+    # symbol legend. Check that no PER-STEP render line emitted a 💭 thought.
+    assert all("💭" not in line for line in outputs[1:])
 
 
 def test_repl_skips_empty_and_whitespace_input():

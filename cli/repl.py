@@ -12,18 +12,27 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from agent.graph import build_graph
 
-WELCOME_MESSAGE: str = (
-    "👋  Hi! I'm a data-analyst assistant for the Bitext Customer Service dataset —\n"
-    "    26,872 real customer support messages and agent replies across 11 categories\n"
-    "    (ACCOUNT, ORDER, REFUND, SHIPPING, FEEDBACK, and more).\n\n"
-    "    Ask me about the data, for example:\n"
-    "      • How many refund requests did we get?\n"
-    "      • Show me 5 examples from the SHIPPING category.\n"
-    "      • What is the distribution of intents in the ACCOUNT category?\n"
-    "      • Summarize how agents respond to complaints.\n\n"
-    "    I only answer questions about this dataset; anything else I'll set aside.\n"
-    "    Type 'quit' or 'exit' to leave.\n"
-)
+WELCOME_MESSAGE: str = """\
+👋  Hi! I'm a data-analyst assistant for the Bitext Customer Service dataset —
+    26,872 real customer support messages and agent replies across 11 categories
+    (ACCOUNT, ORDER, REFUND, SHIPPING, FEEDBACK, and more).
+
+    Ask me about the data, for example:
+      • How many refund requests did we get?
+      • Show me 5 examples from the SHIPPING category.
+      • What is the distribution of intents in the ACCOUNT category?
+      • Summarize how agents respond to complaints.
+
+    As I work, my reasoning streams below — here is what each symbol means:
+      🧭  router decision — how I classified your question
+      💭  thought         — what I'm about to do, and why
+      🔧  tool call       — the function I'm calling and its arguments
+      📊  observation     — what the tool returned
+      🤖  final answer    — my reply to you
+
+    I only answer questions about this dataset; anything else I'll set aside.
+    Type 'quit' or 'exit' to leave.
+"""
 
 _STREAM_CONFIG: dict = {"recursion_limit": 50}
 
