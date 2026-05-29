@@ -72,6 +72,15 @@ def test_router_prompt_mentions_decline_rule():
     assert "never answered from general knowledge" in prompt
 
 
+def test_agent_system_prompt_forbids_markdown_for_cli_output():
+    """The agent prompt must tell the model its output is plain-text CLI, no markdown."""
+    from agent.graph import AGENT_SYSTEM_PROMPT
+
+    text = AGENT_SYSTEM_PROMPT.lower()
+    assert "plain text" in text or "plain-text" in text
+    assert "markdown" in text
+
+
 ALL_INTENTS = [
     "cancel_order", "change_order", "change_shipping_address", "check_cancellation_fee",
     "check_invoice", "check_payment_methods", "check_refund_policy", "complaint",

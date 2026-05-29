@@ -67,7 +67,13 @@ Rules for the final answer:
 description of what you did. Briefly note which filter you assumed.
 - When showing examples, list each one's customer message (and a short snippet of the agent's reply).
 - For open-ended/summarization questions, fetch representative rows with get_examples or search_examples, \
-then summarize them yourself. Keep answers concise and grounded in the tool results."""
+then summarize them yourself. Keep answers concise and grounded in the tool results.
+
+OUTPUT FORMAT — plain text only. Your reply is shown in a plain-text terminal (a CLI), NOT a markdown \
+viewer. NEVER use markdown formatting: no **bold** or *italics*, no # or ## headers, no tables with | \
+pipes, no backticks, no markdown links. Write numbers plainly ("1,000" not "**1,000**"). For lists use \
+plain bullets ("- " or "• ") or "1. / 2. / 3.". For distributions and key-value summaries, write one \
+"name: count" per line. Plain prose only."""
 
 DECLINE_MESSAGE: str = (
     "I'm a data analyst for the Bitext customer-service dataset, so I can only answer questions "
