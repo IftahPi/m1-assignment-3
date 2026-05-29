@@ -14,15 +14,17 @@ from langchain_core.messages import (
     HumanMessage,
     RemoveMessage,
     SystemMessage,
+    ToolMessage,
 )
+from langchain_core.tools import tool as tool_decorator
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from agent.profile import load_profile
+from agent import profile as profile_module
 from agent.router import classify_query
 from agent.state import AgentState
 from agent.tools import TOOLS
-from nebius_client import GENERATOR_MODEL, make_llm
+from nebius_client import GENERATOR_MODEL, ROUTER_MODEL, make_llm
 
 MAX_ITERATIONS: int = 12
 
@@ -92,20 +94,22 @@ You are answering a question the user is asking ABOUT THEMSELVES (for example: \
 "what do you remember about me?", "what's my name?", "what topics do I usually \
 ask about?").
 
-Use ONLY the user profile below to answer. The profile is the only source of \
-truth about this user. If the profile does not contain the information, say so \
-plainly — for example "I don't have that on file yet." — do NOT guess and do \
-NOT use general knowledge. No tools are available in this mode.
+The current user_id is "{user_id}". You have ONE tool:
+  get_personal_info(user_id: str) -> str
+which returns this user's persistent profile as Markdown text.
+
+Procedure: call get_personal_info("{user_id}") FIRST. Then base your answer \
+ONLY on what that tool returns. If the returned text is empty or does not \
+contain the information, say plainly: "I don't have that on file yet." Do \
+NOT guess. Do NOT use general knowledge. Do NOT invent facts. No other tools \
+are available.
 
 Output goes to a plain-text terminal (a CLI). Do NOT use markdown: no \
 **bold**, no tables, no #/## headers, no backticks. Plain prose only, with \
 "- " bullets if you list things.
-
-User profile:
-{profile}
 """
 
-_NO_PROFILE_PLACEHOLDER: str = "(empty — nothing remembered about this user yet)"
+_PERSONAL_NODE_MAX_STEPS: int = 3
 
 _FORCE_ANSWER_INSTRUCTION: str = (
     "You have already gathered the necessary data from the tools above. Do not call any more "
@@ -168,18 +172,55 @@ def _fallback_node(state: AgentState) -> dict:
 def _personal_node(state: AgentState) -> dict:
     """Answer a personal question using ONLY the persistent user profile.
 
-    No tools are bound, so the model can't fabricate facts from the dataset or
-    world knowledge — it either reads the profile or admits it doesn't know.
+    Architecture: the personal node binds exactly ONE tool — a closure-scoped
+    ``get_personal_info(user_id)`` locked to the current user_id. The data
+    tools (``count_records``, ``get_examples``, …) are unreachable here, so
+    the model cannot answer a personal question from dataset facts or world
+    knowledge — it either reads the profile via the tool or admits it doesn't
+    know. A small ReAct mini-loop runs the tool call + final answer in this
+    one node, then the graph goes to END.
     """
-    user_id = state.get("user_id") or "default"
-    profile = load_profile(user_id) or _NO_PROFILE_PLACEHOLDER
-    llm = make_llm(GENERATOR_MODEL, temperature=0.2)  # NO bind_tools
-    prompt = [
-        SystemMessage(content=PERSONAL_SYSTEM_PROMPT.format(profile=profile)),
+    current_user_id = state.get("user_id") or "default"
+
+    @tool_decorator
+    def get_personal_info(user_id: str) -> str:
+        """Return the persistent profile Markdown for the given user.
+
+        The user_id you pass MUST be the current session's user — any other id
+        is refused. The profile may be empty (a brand-new user); do not invent
+        content when it is.
+        """
+        if user_id != current_user_id:
+            return (
+                f"(Access restricted: this tool only returns the current user's profile "
+                f"('{current_user_id}'); you asked for '{user_id}').)"
+            )
+        return profile_module.get_personal_info(current_user_id) or "(empty profile — nothing remembered yet)"
+
+    personal_tools = [get_personal_info]
+    # The personal task is "call one tool, paraphrase its short result" — squarely the
+    # cheap router model's strength. No need for the 120B generator here.
+    llm = make_llm(ROUTER_MODEL, temperature=0.2).bind_tools(personal_tools)
+
+    new_messages: list[AnyMessage] = []
+    history: list[AnyMessage] = [
+        SystemMessage(content=PERSONAL_SYSTEM_PROMPT.format(user_id=current_user_id)),
         *state["messages"],
     ]
-    response = llm.invoke(prompt)
-    return {"messages": [response]}
+
+    for _ in range(_PERSONAL_NODE_MAX_STEPS):
+        response = llm.invoke(history)
+        new_messages.append(response)
+        history.append(response)
+        if not response.tool_calls:
+            break
+        for call in response.tool_calls:
+            result = get_personal_info.invoke(call["args"])
+            tm = ToolMessage(content=result, tool_call_id=call["id"])
+            new_messages.append(tm)
+            history.append(tm)
+
+    return {"messages": new_messages}
 
 
 def _force_answer_node(state: AgentState) -> dict:

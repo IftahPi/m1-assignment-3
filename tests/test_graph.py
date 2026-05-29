@@ -123,12 +123,22 @@ def test_episodic_memory_persists_across_graph_rebuilds(tmp_path):
     assert any(isinstance(m, AIMessage) and "2992" in str(m.content) for m in messages)
 
 
-def test_personal_route_uses_profile_with_no_tools(tmp_path):
-    """A personal query goes to the personal node, which reads the user's profile."""
+def test_personal_route_binds_only_get_personal_info_not_data_tools(tmp_path):
+    """The personal node binds exactly one tool (get_personal_info), never the data tools."""
     from agent import profile as profile_module
 
-    forced = AIMessage(content="Your name is Alice; you are interested in REFUND data.")
-    fake = _fake_make_llm(bound_side_effect=[], plain_return=forced)
+    tool_call_msg = AIMessage(
+        content="",
+        id="ai_personal_1",
+        tool_calls=[{
+            "name": "get_personal_info",
+            "args": {"user_id": "alice"},
+            "id": "c_personal",
+            "type": "tool_call",
+        }],
+    )
+    final = AIMessage(content="Your name is Alice; you are interested in REFUND data.")
+    fake = _fake_make_llm(bound_side_effect=[tool_call_msg, final])
 
     initial = {
         "messages": [HumanMessage(content="What do you remember about me?")],
@@ -141,16 +151,73 @@ def test_personal_route_uses_profile_with_no_tools(tmp_path):
          patch.object(graph_module, "classify_query",
                       return_value=MagicMock(route="personal")), \
          patch.object(graph_module, "make_llm", return_value=fake):
-        # Seed a profile so the personal node has something to use.
         (tmp_path / "alice.md").write_text("# Name\nAlice\n# Interests\n- REFUND data\n")
         result = build_graph().invoke(initial, config=CONFIG)
 
-    # The agent (tool-binding) LLM was NEVER invoked — personal path uses no tools.
-    fake.bind_tools.assert_not_called()
-    # The final message is the personal node's answer.
-    assert result["messages"][-1].content == forced.content
-    # No ToolMessages produced.
-    assert not [m for m in result["messages"] if isinstance(m, ToolMessage)]
+    # Exactly one bind_tools call; the bound list is ONLY get_personal_info,
+    # NOT the data tools (count_records, get_examples, etc.).
+    fake.bind_tools.assert_called_once()
+    bound = fake.bind_tools.call_args[0][0]
+    tool_names = [t.name for t in bound]
+    assert tool_names == ["get_personal_info"]
+    for forbidden in ("count_records", "get_examples", "list_categories",
+                      "intent_distribution", "search_examples", "list_intents"):
+        assert forbidden not in tool_names
+
+    # The tool ran and the profile content reached the LLM as a ToolMessage.
+    tool_msgs = [m for m in result["messages"] if isinstance(m, ToolMessage)]
+    assert len(tool_msgs) == 1
+    assert "Alice" in tool_msgs[0].content
+
+    # The final answer is the personal node's reply.
+    assert result["messages"][-1].content == final.content
+
+
+def test_personal_tool_refuses_a_different_user_id(tmp_path):
+    """The closure-scoped tool only returns the CURRENT user's profile."""
+    from agent import profile as profile_module
+
+    # Round 1: model asks for the WRONG user_id; the tool refuses.
+    # Round 2: model retries with the correct id; gets the profile.
+    # Round 3: model emits its final answer.
+    wrong_id_call = AIMessage(
+        content="",
+        id="ai_wrong",
+        tool_calls=[{"name": "get_personal_info", "args": {"user_id": "bob"},
+                     "id": "c1", "type": "tool_call"}],
+    )
+    correct_id_call = AIMessage(
+        content="",
+        id="ai_right",
+        tool_calls=[{"name": "get_personal_info", "args": {"user_id": "alice"},
+                     "id": "c2", "type": "tool_call"}],
+    )
+    final = AIMessage(content="Your name is Alice.")
+    fake = _fake_make_llm(bound_side_effect=[wrong_id_call, correct_id_call, final])
+
+    initial = {
+        "messages": [HumanMessage(content="What's my name?")],
+        "route": "",
+        "iterations": 0,
+        "user_id": "alice",
+    }
+
+    with patch.object(profile_module, "_PROFILES_DIR", tmp_path), \
+         patch.object(graph_module, "classify_query",
+                      return_value=MagicMock(route="personal")), \
+         patch.object(graph_module, "make_llm", return_value=fake):
+        (tmp_path / "alice.md").write_text("# Name\nAlice")
+        (tmp_path / "bob.md").write_text("# Name\nBob")  # MUST NOT leak
+        result = build_graph().invoke(initial, config=CONFIG)
+
+    tool_msgs = [m for m in result["messages"] if isinstance(m, ToolMessage)]
+    assert len(tool_msgs) == 2
+    # The first tool call (asking for bob) is refused; bob's profile must NOT appear.
+    assert "Access restricted" in tool_msgs[0].content
+    assert "Bob" not in tool_msgs[0].content
+    # The second tool call (asking for alice) returns alice's profile.
+    assert "Alice" in tool_msgs[1].content
+    assert result["messages"][-1].content == final.content
 
 
 def test_runaway_distinct_tool_calls_hit_fallback_after_max_iterations():

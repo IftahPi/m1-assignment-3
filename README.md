@@ -176,9 +176,16 @@ A core design choice: the data-access functions in `dataset/analytics.py` are **
 Two distinct kinds, mirroring the CoALA taxonomy from the lectures:
 
 - **Episodic** (Task 2a) — the literal conversation. Persisted via a `SqliteSaver` checkpointer keyed by `thread_id = --session`. Same `--session` on a later run resumes the prior conversation; follow-ups like *"what about refunds?"* and *"what is the total of the two?"* inherit prior context because the router is given a short "Recent conversation:" block before classifying.
-- **Semantic** (Task 2b) — a per-user **freeform Markdown profile** at `profiles/<user_id>.md` capturing distilled facts (name, recurring interests, preferences) — **not** a transcript replay. Updated by a `summary` step that runs at session end (in `main.py`): it pulls the final state from the checkpointer, asks the generator LLM to merge the new session against the prior profile, and writes the result.
+- **Semantic** (Task 2b) — a per-user **freeform Markdown profile** at `profiles/<user_id>.md` capturing distilled facts (name, recurring interests, preferences) — **not** a transcript replay. Updated by a `summary` step in `main.py` that runs at session end: pull the final state from the checkpointer, ask the generator LLM to merge the new session against the prior profile, write the result. The summary prompt has an explicit **contradiction rule** — when a new fact contradicts an existing one, the old fact is replaced (not kept alongside the new one).
 
-Personal questions get their own graph path — the router now has **four labels** and routes `"what do you remember about me?"`-style queries to a `personal` node that invokes the generator **with no tools bound**, with the profile as the only context. Architecturally, the personal node cannot fabricate from world knowledge or from the dataset.
+Personal questions get their own graph path — the router has **four labels** (`structured` / `unstructured` / `out_of_scope` / `personal`) and routes *"what do you remember about me?"*-style queries to a dedicated `personal` node. The personal node:
+
+- runs on the small **router model** (Qwen3-30B-A3B-Instruct) — paraphrasing a tiny profile file does not need the 70-120B generator;
+- binds **exactly one tool**, a closure-scoped `get_personal_info(user_id)` locked to the current session's user — the LLM cannot read another user's profile even if it tries;
+- has **no access to the data tools** at all — fabrication from dataset facts is structurally impossible;
+- if the profile is empty, the prompt requires the model to say *"I don't have that on file yet"* rather than guess.
+
+The path scheme — *where on disk a user's profile lives* — is owned by one pure function (`agent/profile.py::get_personal_storage_file`); every reader and writer (the tool, the summary code, tests) goes through it, so changing the layout later is a one-line edit.
 
 CLI usage:
 
@@ -190,12 +197,16 @@ python main.py --user alice --session s1   # Alice's first chat
 python main.py --user alice --session s2   # new conversation, same user
 You> What do you remember about me?
   🧭 router → personal
-🤖 - Name: Alice
-   - Interests: REFUND data
-   - Preferences: concise answers
+  🔧 get_personal_info(user_id='alice')
+  📊 (the alice.md contents)
+🤖 Your name is Alice.
 ```
 
-`--user` defaults to `--session` when omitted, so a casual `python main.py --session demo` keys both the conversation and the profile to `"demo"`.
+`--user` defaults to the literal `"default"` (independent of `--session`) — so one user can have many sessions sharing the same profile. Omitting both gives you a "default" user under a "default" session.
+
+#### Planned but not yet implemented
+
+- **Timestamping facts.** Every line in `profiles/<user_id>.md` will eventually be prefixed with the date+time it was added, so old facts can be aged out and the summary node can decide which to keep based on recency. The schema is intentionally freeform Markdown today so this change can be layered on without breaking the storage contract.
 
 ---
 

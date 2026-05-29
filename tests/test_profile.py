@@ -8,22 +8,37 @@ from agent import profile as profile_module
 from agent.profile import (
     SUMMARY_SYSTEM_PROMPT,
     _format_transcript,
-    load_profile,
+    get_personal_info,
+    get_personal_storage_file,
     save_profile,
     summarize_session,
 )
 
 
-def test_load_profile_returns_empty_string_when_no_file(tmp_path):
+def test_get_personal_storage_file_returns_user_specific_path(tmp_path):
+    """The path scheme lives in ONE function and is per-user."""
     with patch.object(profile_module, "_PROFILES_DIR", tmp_path):
-        assert load_profile("nobody") == ""
+        assert get_personal_storage_file("alice") == tmp_path / "alice.md"
+        assert get_personal_storage_file("bob") == tmp_path / "bob.md"
+
+
+def test_summary_prompt_includes_contradiction_rule():
+    """The summary must replace contradicted facts, not keep both."""
+    text = SUMMARY_SYSTEM_PROMPT.lower()
+    assert "contradict" in text
+    assert "remove" in text or "replace" in text
+
+
+def test_get_personal_info_returns_empty_string_when_no_file(tmp_path):
+    with patch.object(profile_module, "_PROFILES_DIR", tmp_path):
+        assert get_personal_info("nobody") == ""
 
 
 def test_save_then_load_round_trips(tmp_path):
     blob = "# Name\nAlice\n\n# Interests\n- REFUND data\n"
     with patch.object(profile_module, "_PROFILES_DIR", tmp_path):
         save_profile("alice", blob)
-        assert load_profile("alice") == blob
+        assert get_personal_info("alice") == blob
         assert (tmp_path / "alice.md").exists()
 
 

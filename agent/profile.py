@@ -4,9 +4,14 @@ Each user gets a single ``profiles/<user_id>.md`` blob distilled from prior
 sessions — names, recurring interests, stated preferences. Distinct from the
 episodic conversation log (which the SQLite checkpointer keeps).
 
-Reads happen at the start of a personal turn (loaded into the agent state),
-writes happen at the end of a session via :func:`summarize_session`, which
-asks the generator LLM to update the profile from the new transcript.
+The path scheme lives in ONE pure function, :func:`get_personal_storage_file`,
+used by every other function here (read/write/tool). Future change to the
+scheme — e.g. moving to one file per user_id+date — only edits that function.
+
+Reads happen at the start of a personal turn (via the LLM tool
+``get_personal_info``). Writes happen at the end of a session via
+:func:`summarize_session`, which asks the generator LLM to merge the new
+transcript against the prior profile.
 """
 
 from pathlib import Path
@@ -27,6 +32,8 @@ NOT a recap of questions asked; it is what is TRUE about the user.
 
 Rules:
 - Keep existing facts unless contradicted by new information.
+- If a new fact CONTRADICTS an existing fact, REMOVE the old one and replace \
+it with the new one. Do not keep both; the latest the user said wins.
 - Add only new, durable facts. Skip one-off questions that don't reveal \
 anything about the user.
 - Use short sentences or bullets under topical headers ("Name", "Interests", \
@@ -36,14 +43,22 @@ anything about the user.
 """
 
 
-def _profile_path(user_id: str) -> Path:
-    """Return the on-disk path of a given user's profile file."""
+def get_personal_storage_file(user_id: str) -> Path:
+    """Return the on-disk path of a given user's profile file.
+
+    Single source of truth for the path scheme — every other function in this
+    module (and the LLM-facing ``get_personal_info`` tool) goes through this.
+    """
     return _PROFILES_DIR / f"{user_id}.md"
 
 
-def load_profile(user_id: str) -> str:
-    """Return the user's profile Markdown, or an empty string if no profile exists."""
-    path = _profile_path(user_id)
+def get_personal_info(user_id: str) -> str:
+    """Return the user's profile Markdown, or an empty string if no profile exists.
+
+    Pure function. The personal node wraps this as an LLM tool; the summary
+    code calls it directly. Same single source of truth for the path scheme.
+    """
+    path = get_personal_storage_file(user_id)
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8")
@@ -52,7 +67,7 @@ def load_profile(user_id: str) -> str:
 def save_profile(user_id: str, text: str) -> None:
     """Write the user's profile Markdown to disk, creating the directory if needed."""
     _PROFILES_DIR.mkdir(parents=True, exist_ok=True)
-    _profile_path(user_id).write_text(text, encoding="utf-8")
+    get_personal_storage_file(user_id).write_text(text, encoding="utf-8")
 
 
 def _format_transcript(messages: list[AnyMessage]) -> str:

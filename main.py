@@ -12,7 +12,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from agent.graph import build_graph
-from agent.profile import load_profile, save_profile, summarize_session
+from agent.profile import get_personal_info, save_profile, summarize_session
 from cli.repl import run_repl
 from nebius_client import GENERATOR_MODEL, make_llm
 
@@ -31,13 +31,11 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--user",
-        default=None,
-        help="User id for the persistent profile; defaults to --session.",
+        default="default",
+        help="User id for the persistent profile (default: 'default'). "
+        "Independent of --session: one user can have many sessions sharing the same profile.",
     )
-    args = parser.parse_args()
-    if args.user is None:
-        args.user = args.session
-    return args
+    return parser.parse_args()
 
 
 def _distill_profile_on_exit(graph: object, session_id: str, user_id: str) -> None:
@@ -53,7 +51,7 @@ def _distill_profile_on_exit(graph: object, session_id: str, user_id: str) -> No
     if not any(isinstance(m, HumanMessage) for m in messages):
         return
 
-    prior_profile = load_profile(user_id)
+    prior_profile = get_personal_info(user_id)
     summary_llm = make_llm(GENERATOR_MODEL, temperature=0.2)  # plain text, no tools
     updated_profile = summarize_session(messages, prior_profile, summary_llm)
     save_profile(user_id, updated_profile)

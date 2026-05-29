@@ -19,6 +19,10 @@ profiles/
 # --- LangGraph Studio runtime cache (created by `langgraph dev`) ---
 .langgraph_api/
 
+# --- memory_eval.py isolated state (separate from the main checkpointer/profile) ---
+checkpoints_memory_eval.sqlite
+profiles_memory_eval/
+
 # --- Cached dataset (re-downloaded by dataset/loader.py on first run) ---
 data/
 
