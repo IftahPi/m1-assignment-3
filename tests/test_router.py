@@ -58,10 +58,12 @@ def test_classify_query_out_of_scope():
 
 
 def test_router_prompt_mentions_labels():
-    """Test that the router prompt mentions all three route labels."""
+    """Test that the router prompt mentions all four route labels."""
     assert "structured" in ROUTER_PROMPT
     assert "unstructured" in ROUTER_PROMPT
     assert "out_of_scope" in ROUTER_PROMPT
+    assert "personal" in ROUTER_PROMPT
+    assert "remember about me" in ROUTER_PROMPT.lower()
 
 
 def test_router_prompt_mentions_decline_rule():

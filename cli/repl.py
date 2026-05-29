@@ -79,10 +79,19 @@ def _render_update(node_name: str, update: object, output_fn: Callable[[str], No
 
 
 def _run_turn(
-    graph: object, query: str, session_id: str, output_fn: Callable[[str], None]
+    graph: object,
+    query: str,
+    session_id: str,
+    user_id: str,
+    output_fn: Callable[[str], None],
 ) -> None:
     """Stream one agent turn and render each step."""
-    state = {"messages": [HumanMessage(content=query)], "route": "", "iterations": 0}
+    state = {
+        "messages": [HumanMessage(content=query)],
+        "route": "",
+        "iterations": 0,
+        "user_id": user_id,
+    }
     for chunk in graph.stream(state, config=_stream_config(session_id), stream_mode="updates"):
         for node_name, update in chunk.items():
             _render_update(node_name, update, output_fn)
@@ -91,6 +100,7 @@ def _run_turn(
 def run_repl(
     graph: object | None = None,
     session_id: str = "default",
+    user_id: str = "default",
     input_fn: Callable[[str], str] = input,
     output_fn: Callable[[str], None] = print,
 ) -> None:
@@ -100,6 +110,8 @@ def run_repl(
         graph: A compiled agent graph. Defaults to ``build_graph()``.
         session_id: Keys the checkpointed conversation thread; the same id
             on a later run resumes the same conversation.
+        user_id: Keys the per-user profile; the personal node uses it to
+            load the user's persistent profile file.
         input_fn: Reads a line of user input. Defaults to ``input``.
         output_fn: Prints a line of output. Defaults to ``print``.
     """
@@ -117,4 +129,4 @@ def run_repl(
         if not query.strip():
             continue
 
-        _run_turn(graph, query, session_id, output_fn)
+        _run_turn(graph, query, session_id, user_id, output_fn)

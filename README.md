@@ -173,11 +173,29 @@ A core design choice: the data-access functions in `dataset/analytics.py` are **
 
 ### Memory
 
-> **Status:** Task 2 in progress.
+Two distinct kinds, mirroring the CoALA taxonomy from the lectures:
 
-The graph compiles cleanly with an optional checkpointer (`build_graph(checkpointer=...)`). Task 2a will wire a `SqliteSaver` and a `--session <id>` CLI flag so conversations persist across restarts. Task 2b will add a per-user **semantic-memory** profile (distilled facts, not message replay) stored as `profiles/<user>.json` and injected into the agent's system prompt — answering "what do you remember about me?".
+- **Episodic** (Task 2a) — the literal conversation. Persisted via a `SqliteSaver` checkpointer keyed by `thread_id = --session`. Same `--session` on a later run resumes the prior conversation; follow-ups like *"what about refunds?"* and *"what is the total of the two?"* inherit prior context because the router is given a short "Recent conversation:" block before classifying.
+- **Semantic** (Task 2b) — a per-user **freeform Markdown profile** at `profiles/<user_id>.md` capturing distilled facts (name, recurring interests, preferences) — **not** a transcript replay. Updated by a `summary` step that runs at session end (in `main.py`): it pulls the final state from the checkpointer, asks the generator LLM to merge the new session against the prior profile, and writes the result.
 
-See `IMPLEMENTATION_PLAN.md` § 7 for the design.
+Personal questions get their own graph path — the router now has **four labels** and routes `"what do you remember about me?"`-style queries to a `personal` node that invokes the generator **with no tools bound**, with the profile as the only context. Architecturally, the personal node cannot fabricate from world knowledge or from the dataset.
+
+CLI usage:
+
+```bash
+python main.py --user alice --session s1   # Alice's first chat
+# … Alice tells the agent about her interests, then quits
+# → 💾 Updated profile for user 'alice' saved to profiles/alice.md
+
+python main.py --user alice --session s2   # new conversation, same user
+You> What do you remember about me?
+  🧭 router → personal
+🤖 - Name: Alice
+   - Interests: REFUND data
+   - Preferences: concise answers
+```
+
+`--user` defaults to `--session` when omitted, so a casual `python main.py --session demo` keys both the conversation and the profile to `"demo"`.
 
 ---
 

@@ -16,6 +16,9 @@ __pycache__/
 checkpoints.sqlite
 profiles/
 
+# --- LangGraph Studio runtime cache (created by `langgraph dev`) ---
+.langgraph_api/
+
 # --- Cached dataset (re-downloaded by dataset/loader.py on first run) ---
 data/
 

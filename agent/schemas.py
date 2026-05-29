@@ -47,9 +47,10 @@ NormalizedIntent = Annotated[IntentName, BeforeValidator(_to_lower)]
 class RouteDecision(BaseModel):
     """Result of query routing classification."""
 
-    route: Literal["structured", "unstructured", "out_of_scope"] = Field(
+    route: Literal["structured", "unstructured", "out_of_scope", "personal"] = Field(
         description="The classification of the user query: structured (data-driven answers), "
-        "unstructured (summarization), or out_of_scope (not about the dataset)."
+        "unstructured (summarization), out_of_scope (not about the dataset), or personal "
+        "(about the user themselves — answered from the persistent user profile)."
     )
     reason: str = Field(
         description="One short sentence explaining why the query was classified this way."

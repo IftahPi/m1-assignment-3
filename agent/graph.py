@@ -18,6 +18,7 @@ from langchain_core.messages import (
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
+from agent.profile import load_profile
 from agent.router import classify_query
 from agent.state import AgentState
 from agent.tools import TOOLS
@@ -86,6 +87,26 @@ FALLBACK_MESSAGE: str = (
     "question — for example, name a specific category or intent?"
 )
 
+PERSONAL_SYSTEM_PROMPT: str = """\
+You are answering a question the user is asking ABOUT THEMSELVES (for example: \
+"what do you remember about me?", "what's my name?", "what topics do I usually \
+ask about?").
+
+Use ONLY the user profile below to answer. The profile is the only source of \
+truth about this user. If the profile does not contain the information, say so \
+plainly — for example "I don't have that on file yet." — do NOT guess and do \
+NOT use general knowledge. No tools are available in this mode.
+
+Output goes to a plain-text terminal (a CLI). Do NOT use markdown: no \
+**bold**, no tables, no #/## headers, no backticks. Plain prose only, with \
+"- " bullets if you list things.
+
+User profile:
+{profile}
+"""
+
+_NO_PROFILE_PLACEHOLDER: str = "(empty — nothing remembered about this user yet)"
+
 _FORCE_ANSWER_INSTRUCTION: str = (
     "You have already gathered the necessary data from the tools above. Do not call any more "
     "tools. Answer the user's question now using the results you already have."
@@ -144,6 +165,23 @@ def _fallback_node(state: AgentState) -> dict:
     return {"messages": [AIMessage(content=FALLBACK_MESSAGE)]}
 
 
+def _personal_node(state: AgentState) -> dict:
+    """Answer a personal question using ONLY the persistent user profile.
+
+    No tools are bound, so the model can't fabricate facts from the dataset or
+    world knowledge — it either reads the profile or admits it doesn't know.
+    """
+    user_id = state.get("user_id") or "default"
+    profile = load_profile(user_id) or _NO_PROFILE_PLACEHOLDER
+    llm = make_llm(GENERATOR_MODEL, temperature=0.2)  # NO bind_tools
+    prompt = [
+        SystemMessage(content=PERSONAL_SYSTEM_PROMPT.format(profile=profile)),
+        *state["messages"],
+    ]
+    response = llm.invoke(prompt)
+    return {"messages": [response]}
+
+
 def _force_answer_node(state: AgentState) -> dict:
     """Force a tool-free final answer when the agent repeats a tool call it already made.
 
@@ -165,8 +203,13 @@ def _force_answer_node(state: AgentState) -> dict:
 
 
 def _route_after_router(state: AgentState) -> str:
-    """Send out-of-scope queries to decline; everything else to the agent."""
-    return "decline" if state["route"] == "out_of_scope" else "agent"
+    """Route by the router's label: out_of_scope → decline, personal → personal_node, else agent."""
+    route = state["route"]
+    if route == "out_of_scope":
+        return "decline"
+    if route == "personal":
+        return "personal"
+    return "agent"
 
 
 def _route_after_agent(state: AgentState) -> str:
@@ -198,10 +241,13 @@ def build_graph(checkpointer=None):
     builder.add_node("decline", _decline_node)
     builder.add_node("fallback", _fallback_node)
     builder.add_node("force_answer", _force_answer_node)
+    builder.add_node("personal", _personal_node)
 
     builder.add_edge(START, "router")
     builder.add_conditional_edges(
-        "router", _route_after_router, {"decline": "decline", "agent": "agent"}
+        "router",
+        _route_after_router,
+        {"decline": "decline", "agent": "agent", "personal": "personal"},
     )
     builder.add_conditional_edges(
         "agent",
@@ -212,4 +258,5 @@ def build_graph(checkpointer=None):
     builder.add_edge("decline", END)
     builder.add_edge("fallback", END)
     builder.add_edge("force_answer", END)
+    builder.add_edge("personal", END)
     return builder.compile(checkpointer=checkpointer)

@@ -123,6 +123,36 @@ def test_episodic_memory_persists_across_graph_rebuilds(tmp_path):
     assert any(isinstance(m, AIMessage) and "2992" in str(m.content) for m in messages)
 
 
+def test_personal_route_uses_profile_with_no_tools(tmp_path):
+    """A personal query goes to the personal node, which reads the user's profile."""
+    from agent import profile as profile_module
+
+    forced = AIMessage(content="Your name is Alice; you are interested in REFUND data.")
+    fake = _fake_make_llm(bound_side_effect=[], plain_return=forced)
+
+    initial = {
+        "messages": [HumanMessage(content="What do you remember about me?")],
+        "route": "",
+        "iterations": 0,
+        "user_id": "alice",
+    }
+
+    with patch.object(profile_module, "_PROFILES_DIR", tmp_path), \
+         patch.object(graph_module, "classify_query",
+                      return_value=MagicMock(route="personal")), \
+         patch.object(graph_module, "make_llm", return_value=fake):
+        # Seed a profile so the personal node has something to use.
+        (tmp_path / "alice.md").write_text("# Name\nAlice\n# Interests\n- REFUND data\n")
+        result = build_graph().invoke(initial, config=CONFIG)
+
+    # The agent (tool-binding) LLM was NEVER invoked — personal path uses no tools.
+    fake.bind_tools.assert_not_called()
+    # The final message is the personal node's answer.
+    assert result["messages"][-1].content == forced.content
+    # No ToolMessages produced.
+    assert not [m for m in result["messages"] if isinstance(m, ToolMessage)]
+
+
 def test_runaway_distinct_tool_calls_hit_fallback_after_max_iterations():
     counter = {"n": 0}
 
