@@ -115,8 +115,14 @@ def _last_human_text(messages: list[AnyMessage]) -> str:
 
 
 def _router_node(state: AgentState) -> dict:
-    """Classify the latest user query into a route label."""
-    decision = classify_query(_last_human_text(state["messages"]))
+    """Classify the latest user query into a route label, with prior turns as context.
+
+    Passing the recent conversation lets the router correctly classify follow-ups
+    like "what about refunds?" or "what is the total of the two?" — which look
+    out-of-scope in isolation but inherit the topic of the prior exchange.
+    """
+    messages = state["messages"]
+    decision = classify_query(_last_human_text(messages), prior_messages=messages[:-1])
     return {"route": decision.route}
 
 

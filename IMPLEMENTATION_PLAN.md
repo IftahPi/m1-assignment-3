@@ -9,15 +9,30 @@
 
 **DONE & committed (steps 1–3):** planning docs · pinned `requirements.txt` · `.gitignore` · `nebius_client.py` (+ smoke test, connectivity verified) · query router (`agent/router.py`, `agent/schemas.py::RouteDecision`) · CLI shell with welcome banner (`cli/repl.py` step-3 form) · `router_eval.py` (13/13 live).
 
-**DONE, NOT yet committed (step 4 = Task 1 complete):** `dataset/{loader,analytics}.py` · tool input schemas + `agent/tools.py` (6 tools) · `agent/state.py` · `agent/graph.py` (routed ReAct loop + `force_answer` dedupe guard + `fallback`) · `cli/repl.py` rewritten to stream reasoning · `agent_eval.py` (8/8 live). **42 unit tests pass.** Generator runs at `temperature=0.2`; `MAX_ITERATIONS=12`. Self-ranked 9/10.
+**DONE & pushed** (Task 1 complete and post-step-4 hardening pushed to `origin/main` HEAD = `2dc0c28`):
+step 4 graph + tools + force_answer guard · README · renderer surfaces 💭 Thought · `agent_eval.py` is a rubric-driven trace dump (LLM-as-judge) · **generator switched to `openai/gpt-oss-120b`** after live A/B (11/11 vs Llama's 8/11) · welcome banner has symbol legend · agent prompt forbids markdown for CLI output.
 
-**TODO (in order):**
-1. Commit step 4.
-2. **Task 2a** — SQLite checkpointer (`langgraph-checkpoint-sqlite`), `main.py --session <id>`, persistence across restart, follow-up queries. (`build_graph(checkpointer=...)` already accepts a checkpointer.)
-3. **Task 2b** — per-user profile (distilled facts, persisted, injected into the agent system prompt; "what do you remember about me?"). See plan §7.
-4. **Task 3** — `mcp_server.py` (FastMCP) exposing ≥3 `dataset.analytics` functions; README client snippet.
-5. `README.md` (5-min clone-to-run, architecture, model choice, MCP connect) and the deliverable **zip** (see `DELIVERABLES_NOTES.md`).
-6. Optional bonuses (Streamlit UI; query recommender).
+**TASK 2a — IN PROGRESS (uncommitted, REPL plumbed, main.py + persistence test still to do):**
+- `cli/repl.py`: `run_repl(session_id=...)` and `_run_turn` thread session_id into the graph config as `configurable.thread_id`. Helper `_stream_config(session_id)`. ✅
+- `tests/test_repl.py`: FakeGraph captures `last_config`; `test_repl_passes_session_id_as_thread_id_in_graph_config` passes. ✅
+- REMAINING:
+  (a) `main.py` argparse `--session` + `--user` (user defaults to session) + `with SqliteSaver.from_conn_string("checkpoints.sqlite") as saver: graph = build_graph(checkpointer=saver); run_repl(graph, session_id=...)`.
+  (b) `tests/test_graph.py::test_episodic_memory_persists_across_graph_rebuilds(tmp_path)` — open saver, build graph, invoke (mocked LLM), close. Re-open same db, `graph.get_state(config)`, assert prior AI answer in messages.
+  (c) Live: `--session demo`, ask Q1, Q2, Q3, quit, restart same session, ask "what did I just ask?" → remembers.
+
+**TASK 2b — NOT YET STARTED (design confirmed):**
+- Profile = freeform `profiles/<user>.md` (NOT typed JSON).
+- `--user` defaults to `--session`; many sessions → same profile.
+- Distill timing = **end-of-session**; node/function name = `summary` (assignment hint).
+- Implementation note: simpler to call `summary(messages, prior_profile)` from `main.py` after the REPL loop exits (the graph has no natural "session end" event), rather than as a graph node. Behaviour and name preserved.
+- Load profile at startup → inject into `AGENT_SYSTEM_PROMPT` so "what do you remember about me?" is answered by reading injected context.
+
+**TODO order from here:**
+1. Finish Task 2a (a/b/c above) → commit + push.
+2. Task 2b: `agent/profile.py`, `summary()` call, `--user` arg, profile-injection in system prompt, tests, README memory section becomes real.
+3. **Task 3** — `mcp_server.py` (FastMCP) exposing ≥3 `dataset.analytics` functions; README snippet already shipped.
+4. Deliverable zip (`DELIVERABLES_NOTES.md`).
+5. Optional bonuses (Streamlit UI; query recommender).
 
 Architecture overview for fast onboarding is in `CLAUDE.md`. Detailed per-file specs below.
 

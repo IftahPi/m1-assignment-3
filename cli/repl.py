@@ -34,7 +34,12 @@ WELCOME_MESSAGE: str = """\
     Type 'quit' or 'exit' to leave.
 """
 
-_STREAM_CONFIG: dict = {"recursion_limit": 50}
+_RECURSION_LIMIT: int = 50
+
+
+def _stream_config(session_id: str) -> dict:
+    """Build the per-turn graph config: session keys the checkpoint thread."""
+    return {"configurable": {"thread_id": session_id}, "recursion_limit": _RECURSION_LIMIT}
 
 
 def _format_args(args: dict) -> str:
@@ -73,16 +78,19 @@ def _render_update(node_name: str, update: object, output_fn: Callable[[str], No
         _render_message(message, output_fn)
 
 
-def _run_turn(graph: object, query: str, output_fn: Callable[[str], None]) -> None:
+def _run_turn(
+    graph: object, query: str, session_id: str, output_fn: Callable[[str], None]
+) -> None:
     """Stream one agent turn and render each step."""
     state = {"messages": [HumanMessage(content=query)], "route": "", "iterations": 0}
-    for chunk in graph.stream(state, config=_STREAM_CONFIG, stream_mode="updates"):
+    for chunk in graph.stream(state, config=_stream_config(session_id), stream_mode="updates"):
         for node_name, update in chunk.items():
             _render_update(node_name, update, output_fn)
 
 
 def run_repl(
     graph: object | None = None,
+    session_id: str = "default",
     input_fn: Callable[[str], str] = input,
     output_fn: Callable[[str], None] = print,
 ) -> None:
@@ -90,6 +98,8 @@ def run_repl(
 
     Args:
         graph: A compiled agent graph. Defaults to ``build_graph()``.
+        session_id: Keys the checkpointed conversation thread; the same id
+            on a later run resumes the same conversation.
         input_fn: Reads a line of user input. Defaults to ``input``.
         output_fn: Prints a line of output. Defaults to ``print``.
     """
@@ -107,4 +117,4 @@ def run_repl(
         if not query.strip():
             continue
 
-        _run_turn(graph, query, output_fn)
+        _run_turn(graph, query, session_id, output_fn)

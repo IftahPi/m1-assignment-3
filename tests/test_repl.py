@@ -11,9 +11,11 @@ class FakeGraph:
     def __init__(self, chunks: list | None = None) -> None:
         self.chunks = chunks or []
         self.stream_calls = 0
+        self.last_config: dict | None = None
 
     def stream(self, state, config=None, stream_mode=None):
         self.stream_calls += 1
+        self.last_config = config
         return iter(self.chunks)
 
 
@@ -29,6 +31,20 @@ def test_repl_prints_welcome_on_start():
 
     assert outputs[0] == WELCOME_MESSAGE
     assert "dataset" in WELCOME_MESSAGE.lower()
+
+
+def test_repl_passes_session_id_as_thread_id_in_graph_config():
+    """The session_id arg flows through to the graph as configurable.thread_id."""
+    chunks = [{"agent": {"messages": [AIMessage(content="ok")]}}]
+    graph = FakeGraph(chunks)
+    run_repl(
+        graph=graph,
+        session_id="my_session_123",
+        input_fn=_scripted_input(["hi", "quit"]),
+        output_fn=lambda _t: None,
+    )
+    assert graph.last_config is not None
+    assert graph.last_config["configurable"]["thread_id"] == "my_session_123"
 
 
 def test_repl_renders_router_tool_observation_and_answer():

@@ -72,6 +72,40 @@ def test_router_prompt_mentions_decline_rule():
     assert "never answered from general knowledge" in prompt
 
 
+def test_router_prompt_includes_follow_up_rule():
+    """The prompt must tell the router how to treat follow-up questions in a session."""
+    prompt = ROUTER_PROMPT.lower()
+    assert "follow-up" in prompt
+    assert "recent conversation" in prompt
+
+
+def test_classify_query_passes_recent_history_to_the_llm():
+    """When prior_messages are given, the router invoke sees a 'Recent conversation:' block."""
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    mock_llm = MagicMock()
+    mock_llm.with_structured_output.return_value.invoke.return_value = RouteDecision(
+        route="structured", reason="follow-up about counts"
+    )
+
+    history = [
+        HumanMessage(content="How many complaints did we get?"),
+        AIMessage(content="There are 1,000 complaints."),
+    ]
+
+    with patch("agent.router.make_llm", return_value=mock_llm):
+        classify_query("What about refunds?", prior_messages=history)
+
+    # The structured-output LLM was invoked with a 2-message list whose user
+    # content carries both the recent context and the new question.
+    call_args = mock_llm.with_structured_output.return_value.invoke.call_args
+    msgs = call_args[0][0]
+    user_content = msgs[1]["content"]
+    assert "Recent conversation:" in user_content
+    assert "complaints" in user_content.lower()
+    assert "What about refunds?" in user_content
+
+
 def test_agent_system_prompt_forbids_markdown_for_cli_output():
     """The agent prompt must tell the model its output is plain-text CLI, no markdown."""
     from agent.graph import AGENT_SYSTEM_PROMPT

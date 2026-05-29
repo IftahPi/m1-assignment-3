@@ -91,6 +91,38 @@ def test_repeated_tool_call_triggers_force_answer():
     assert _ai_with_tool_calls(result["messages"]) == 1
 
 
+def test_episodic_memory_persists_across_graph_rebuilds(tmp_path):
+    """SqliteSaver: a new build_graph() with the same db file resumes the prior conversation."""
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    db_path = str(tmp_path / "checkpoints.sqlite")
+    session_id = "test_session"
+    config = {"configurable": {"thread_id": session_id}, "recursion_limit": 50}
+
+    final = AIMessage(content="We received 2992 refund-related requests.")
+    fake = _fake_make_llm([_tool_call_message("ai_1"), final])
+
+    # First "process" — invoke once; the saver persists final state to db.
+    with SqliteSaver.from_conn_string(db_path) as saver:
+        with patch.object(graph_module, "classify_query",
+                          return_value=MagicMock(route="structured")), \
+             patch.object(graph_module, "make_llm", return_value=fake):
+            graph = build_graph(checkpointer=saver)
+            graph.invoke(_initial_state("How many refunds?"), config=config)
+
+    # Second "process" — same db file, brand-new graph instance. No LLM patches
+    # needed because we are not invoking, only reading state.
+    with SqliteSaver.from_conn_string(db_path) as saver:
+        graph = build_graph(checkpointer=saver)
+        state = graph.get_state(config)
+
+    messages = state.values.get("messages", [])
+    # The prior Human + AI(final) must have survived the restart.
+    assert any(isinstance(m, HumanMessage) and "refunds" in str(m.content).lower()
+               for m in messages)
+    assert any(isinstance(m, AIMessage) and "2992" in str(m.content) for m in messages)
+
+
 def test_runaway_distinct_tool_calls_hit_fallback_after_max_iterations():
     counter = {"n": 0}
 
