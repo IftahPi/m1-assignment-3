@@ -24,5 +24,8 @@ python-dotenv==1.2.2
 # Testing (TDD — python-oop skill)
 pytest==9.0.1
 
+# LangGraph Studio (visual debugger; `langgraph dev` serves the graph locally)
+langgraph-cli[inmem]==0.4.27
+
 # --- Bonus A (Streamlit UI) -- uncomment if attempted ---
 # streamlit==1.41.1
